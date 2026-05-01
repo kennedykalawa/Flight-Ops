@@ -112,6 +112,18 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 ::-webkit-scrollbar-track{background:var(--dark)}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:var(--pink)}
+
+/*adding my tag*/
+.me{
+    background:var(--surface2);color:var(--text);border:1px solid var(--border)
+}
+.me:hover{
+border-color:var(--pink);color:var(--pink);transform:translateY(-1px)
+
+}
+.mee a{
+    text-decoration: none;
+}
 </style>
 </head>
 <body>
@@ -185,6 +197,9 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
         <button class="btn btn-ghost" id="btnSort" disabled>🔄 &nbsp;Re-sort & Refresh Groups</button>
         <button class="btn btn-pink" id="btnXlsx" disabled>⬇ &nbsp;Download Excel (.xlsx)</button>
         <button class="btn btn-ghost" id="btnPdf"  disabled>⬇ &nbsp;Download PDF (A4 Landscape)</button>
+      </div>
+      <div class="mee">
+          <button class="me"><a href="https://kennedykalawa.github.io/portfolio-sample/" >Made by Ktec</a></button>
       </div>
     </div>
 
