@@ -139,7 +139,9 @@ th:not(.sort-asc):not(.sort-desc) .sort-icon::after{content:"⇅"}
 
 .rpl-table thead th:last-child{text-align:left;padding-left:6px}
 .rpl-table tbody tr.sep td{height:16px;padding:0;border:none;background:transparent}
-.rpl-table tbody tr.sep-added td{height:8px;padding:0;border:none;background:#ddd;font-size:6px;color:#999;text-align:center;letter-spacing:2px}
+.rpl-table tbody tr.sep-added td{height:8px;padding:0;border:none;background:#ddd;font-size:6px;color:#999;text-align:center;letter-spacing:2px;transition:all .2s;}
+.rpl-table tbody tr.sep-added:hover td{background:#bbb;color:#333;cursor:pointer;}
+
 .rpl-table tbody tr.dr td{padding:4px;text-align:center;color:#000;border:1px solid #bbb}
 .rpl-table tbody tr.dr td:last-child{text-align:left;font-weight:700;padding-left:6px}
 .rpl-table tbody tr.dr{background:#fff}
@@ -266,6 +268,7 @@ th:not(.sort-asc):not(.sort-desc) .sort-icon::after{content:"⇅"}
 
         <button class="btn btn-pink" id="btnXlsx" disabled style="margin-top:8px;">⬇ &nbsp;Download Excel (.xlsx)</button>
         <button class="btn btn-ghost" id="btnPdf" disabled>⬇ &nbsp;Download PDF (A4 Landscape)</button>
+        <button class="btn btn-ghost" id="btnCopyTable" disabled>📋 Copy Table to Clipboard</button>
       </div>
       <div class="mee" style="margin-top:1rem">
         <button class="me"><a href="https://kennedykalawa.github.io/portfolio-sample/">Made by Ktec</a></button>
@@ -294,8 +297,8 @@ th:not(.sort-asc):not(.sort-desc) .sort-icon::after{content:"⇅"}
           <option value="captain">Captain</option>
         </select>
         <button class="btn btn-ghost btn-sm" id="btnClearFilter">✕</button>
-        <button class="btn btn-ghost btn-sm" id="btnAddSpacer">━ Spacer</button>
-        <button class="btn btn-ghost btn-sm" id="btnClearSpacers">✕ Clear All</button>
+        <button class="btn btn-ghost btn-sm" id="btnAddSpacer">━ + Spacer</button>
+        <button class="btn btn-ghost btn-sm" id="btnClearSpacers">✕ Clear Spacers</button>
       </div>
       <span class="pb-label" id="pbDate"></span>
     </div>
@@ -320,19 +323,21 @@ th:not(.sort-asc):not(.sort-desc) .sort-icon::after{content:"⇅"}
   <div class="ctx-item" id="ctxPasteRow">📌 Paste Row Below</div>
   <div class="ctx-item" id="ctxFillCol">🧪 Fill Column (with this value)</div>
   <div class="ctx-sep"></div>
+  <div class="ctx-item" id="ctxClearCell">🧹 Clear Cell</div>
+  <div class="ctx-item" id="ctxDelRow">🗑 Delete Row</div>
+  <div class="ctx-item ctx-danger" id="ctxDelCol">🗑 Delete Column</div>
+  <div class="ctx-sep"></div>
   <div class="ctx-item" id="ctxInsAbove">⬆ Insert Row Above</div>
   <div class="ctx-item" id="ctxInsBelow">⬇ Insert Row Below</div>
   <div class="ctx-item" id="ctxInsSpacer">━ Insert Spacer Here</div>
   <div class="ctx-item" id="ctxRemSpacer">🗑 Remove Spacer Above</div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item ctx-danger" id="ctxDelRow">🗑 Delete Row</div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
 // ── CONSTANTS & STATE ───────────────────────────────────────────────────────
-const LOGO_SRC = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCABhAcIDASIAAhEBAxEB/8QAHQABAAMBAQEBAQEAAAAAAAAAAAcICQYFBAIDAf/EAEoQAAEDAwIEAgcFBAUKBgMAAAECAwQABQYHEQgSITFBURMUImGBkaEJFTJxsRdCUoIWI2KSwTNDRVdzlaKy0dIYJDRTcsKD4fD/xAAcAQEAAgIDAQAAAAAAAAAAAAAABAUGBwIDCAH/xAA+EQABAwMCBAQEBAELBQEAAAABAAIDBAURBiEHEjFREyJBYXGBkaEUFTKxchcjM0JigqLB0eHxFiY0wtLy/9oADAMBAAIRAxEAPwDT2lKURKUpREpVTuPXVvLMCs2P49iN8l2p+5uOSHpER5TToS2QAnmSQQDuflVLf2961f608o/3q/8A91T4KB87OcHC2vpjhNX6mtjLmydsbX5wCCTgHGdvcFbB0rHz9vetX+tPKP8Aer//AHV0OnurOtGWZvY8bVqllXJcZzMde10e3CVLAP73vrsdbHtGS5Xc3A6vp4nSvrGYaCT5XdAMlaxUr+MJhUWGxFW8t1TLSWy4s7qWQANyfEmv7VWLRxABwEpSlF8SlKURKUpREpSlESlKURKUpREpSlESlKURf4taG0FxxaUpT1KlHYCvjVe7Mg7Ku8IH3yED/Go+4m30xtBM2eWpSQLWvqk7HfmTWSK3nStR9IrqfOp1LR/iWl2cYW0tB8N260o5at1T4XI7lxyc2dgc55h3W2sedBlnaLMYeI/9twK/Sv71mtwCKnr12Z9G876sm2Sy6kE8pPKOXcVpTXTUwfh38mcrHNbaVGj7n+XCXxPKHZxy9c7Yye3dKUpUdYglKUoiUpSiJSlKIlKUoiV5l2yjG7CCb1f7fB27iRIQgj4E190uU1CivTHzs2whTij7gNzWOWq+XXTNtQ79kV1kqeekznQFb/uJUUpH90CpdLS/iXEZxhbC0BoU62nma+Xw2RgEkDJJJ2A3HY7/AA2Wtlu1N07uz3q9tzeySXN9uVua2T+tdKhaHEBxtaVpUNwpJ3BFYmWmI/cbpDt7G5ckyG2UD3qUAP1rZTT6xO4xg1hx5/8Aylut7EZfXfqlABrlV0opsYOcqZxC0DTaKZA6GoMhkJ2";
+const LOGO_SRC = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/AARCABhAcIDASIAAhEBAxEB/8QAHQABAAMBAQEBAQEAAAAAAAAAAAcICQYFBAIDAf/EAEoQAAEDAwIEAgcFBAUKBgMAAAECAwQABQYHEQgSITFBURMUImGBkaEJFTJxsRdCUoIWI2KSwTNDRVdzlaKy0dIYJDRTcsKD4fD/xAAcAQEAAgIDAQAAAAAAAAAAAAAABAUGBwIDCAH/xAA+EQABAwMCBAQEBAELBQEAAAABAAIDBAURBiEHEjFREyJBYXGBkaEUFTKxchcjM0JigqLB0eHxFiY0wtLy/9oADAMBAAIRAxEAPwDT2lKURKUpREpVTuPXVvLMCs2P49iN8l2p+5uOSHpER5TToS2QAnmSQQDuflVLf2961f608o/3q/8A91T4KB87OcHC2vpjhNX6mtjLmydsbX5wCCTgHGdvcFbB0rHz9vetX+tPKP8Aer//AHV0OnurOtGWZvY8bVqllXJcZzMde10e3CVLAP73vrsdbHtGS5Xc3A6vp4nSvrGYaCT5XdAMlaxUr+MJhUWGxFW8t1TLSWy4s7qWQANyfEmv7VWLRxABwEpSlF8SlKURKUpREpSlESlKURKUpREpSlESlKURf4taG0FxxaUpT1KlHYCvjVe7Mg7Ku8IH3yED/Go+4m30xtBM2eWpSQLWvqk7HfmTWSK3nStR9IrqfOp1LR/iWl2cYW0tB8N260o5at1T4XI7lxyc2dgc55h3W2sedBlnaLMYeI/9twK/Sv71mtwCKnr12Z9G876sm2Sy6kE8pPKOXcVpTXTUwfh38mcrHNbaVGj7n+XCXxPKHZxy9c7Yye3dKUpUdYglKUoiUpSiJSlKIlKUoiV5l2yjG7CCb1f7fB27iRIQgj4E190uU1CivTHzs2whTij7gNzWOWq+XXTNtQ79kV1kqeekznQFb/uJUUpH90CpdLS/iXEZxhbC0BoU62nma+Xw2RgEkDJJJ2A3HY7/AA2Wtlu1N07uz3q9tzeySXN9uVua2T+tdKhaHEBxtaVpUNwpJ3BFYmWmI/cbpDt7G5ckyG2UD3qUAP1rZTT6xO4xg1hx5/8Aylut7EZfXfqlABrlV0opsYOcqZxC0DTaKZA6GoMhkJ2LQMAY3yD3OOi6ClKVCWsUpSlESlKURKV5eR5TjmIW1d3yi9w7XCb/ABPSnQ2kfE1El94z+HqxOlpWa+vkeMGOt5PzHSubI3v/AEjKtbfY7ndRmhp3yDu1pI+oGFN9K5HTDVTEdXscOU4ZIkPQQ+uOS+yWlhae/snwrrq4kFpwVBqqWeimdT1LC17TggjBB7EJSlK+LoSlKURKUpREpSlEUX6r8OenGs1yiXTNY0516G2WmvQylNgJPfoKgnXPhE0L040pyLMLbBuSJ1vilcXnnLUC5uABse9XGqqX2heUptmmVsxxiVyP3OcFuNg9VMpSfpzbVLppJDI1gOy2NoS83yqu1Haaeqe2LnHlDjjlB5iMdiMrO07bnbtv0qwPA7iiMk11t8iVGLka2RnpalbbhLiQOT61X2r2/ZyYo8xa8lzB9gejlLaiMLI8UlRXt8xV1Wv8OAr0pxGuX5XpmrlBwXN5B8XHl+wJPyV06UqItaeJ3TXRRtUS8TTcr0U8zdriKBdHkXD2bB9/X3VjjGOeeVoyV4zttsrLvUNpaGMySHoAM/8AA9zspdr8uOttJ53XEoT5qOwrNLUTju1my55xnGpMbF4JKglENsLeUk/xOLB6+9ITUKXTUzUW9rWu651kEorJKg5cXlJ+XNsKsGWyRwy44W4LZwOu9SwPrp2RE+gy8/PGB9CVsh962vfb7yi7/wC2T/1r6G3Wnk8zLqFp80qBFYoG+30K5jeJ2/n6wv8A616UDUTP7Xt925xf4oT2DNyeQPkFV2G1H0crWTgNKB/1t5N/vV// uqyZbpWfpfhbst/CHUFo5vwFz8Lm68vO3OO+CMrSzGOEfQLErtHvdpwdJmRFhxlciY88lKgdweVaincH3VMNU54AZuf5SrJMtyrK7vdYKUtwmG5kxx5KHQeYqAUSAeUgVbLJ8osGG2STkWTXRi326InndfeVske4eZPgB1qBUNeJORzuYhak1lR3KmvLrZWVLqqRmADlztyAeUAkn1xgeq9Svy442yguOuJQkd1KOwFUP1j+0FvM1+RZtILaiBFSSgXWY2FvL/tIbPso/m5vhVZb7qtqxnM1xy75tkFxekHq0iU4EH8m0EJHwFSIrdI8ZdssxsnBe9XGIT172wNO+D5nfMDAHzOy4Wv337Y+bk++YPN5esI3/WvsbcbdQHGlpWk9lJO4NYpTmchtrqXLi1cIri/aSp4LQT7xvXU4VrjqvgE5qdjWdXZn0XT0DslTzJHkW1kp+ldrrWcZY7KvqngTN4XNR1oc7+0zAPzDnfsthqVC3DDxCsa74m49cIzMO/2zlROYaPsOA9nUA9kk9Ntz1qmPE7rzqBP1lvsfHMwvFqgW531FtiHOcab3bJSpWySBuSKiRUj5JDGdiFr+w8OrnebxPZpSInwjLidx1AGMdc5yD2Uv/aP36MiJi2NEH07npJo/wDgDyfqaovXq5BlWTZXJRMye/3C6vtJ5EOTJK3lJT5AqJ2FeVV9TQ+BGGL1VpDT50vZ4rY5/MW5JI2BJJOy074FbBKsmg8N2Yyptc+dIkoCh+Jskcp+PWrC1jTbdVNTLNBattpz3IIcRgcrTDFwdQhA8gkK2FTfwkZZqxnmt1khzM6v82DAUqbMYfuLq21spGxCkqVsRuoVWVFC7LpS4d1pbWXCusllrb/PVMDfPJjlPTqBnPwC0npSlVS8/JSlKIlKUoiUpSiJWdH2hGWsXrVO3Y9HcJ+44PonRv051kL/NPLR/iWl2cYW0tB8N260o5at1T4XI7lxyc2dgc55h3W2sedBlnaLMYeI/9twK/Sv71mtwCKnr12Z9G876sm2Sy6kE8pPKOXcVpTXTUwfh38mcrHNbaVGj7n+XCXxPKHZxy9c7Yye3dKUpUdYglKUoiUpSiJSlKIlKUoiV5l2yjG7CCb1f7fB27iRIQgj4E190uU1CivTHzs2whTij7gNzWOWq+XXTNtQ79kV1kqeekznQFb/uJUUpH90CpdLS/iXEZxhbC0BoU62nma+Xw2RgEkDJJJ2A3HY7/AA2Wtlu1N07uz3q9tzeySXN9uVua2T+tdKhaHEBxtaVpUNwpJ3BFYmWmI/cbpDt7G5ckyG2UD3qUAP1rZTT6xO4xg1hx5/8Aylut7EZfXfqlABrlV0opsYOcqZxC0DTaKZA6GoMhkJ2LQMAY3yD3OOi6ClKVCWsUpSlESlKURKV5eR5TjmIW1d3yi9w7XCb/ABPSnQ2kfE1El94z+HqxOlpWa+vkeMGOt5PzHSubI3v/AEjKtbfY7ndRmhp3yDu1pI+oGFN9K5HTDVTEdXscOU4ZIkPQQ+uOS+yWlhae/snwrrq4kFpwVBqqWeimdT1LC17TggjBB7EJSlK+LoSlKURKUpREpSlEUX6r8OenGs1yiXTNY0516G2WmvQylNgJPfoKgnXPhE0L040pyLMLbBuSJ1vilcXnnLUC5uABse9XGqqX2heUptmmVsxxiVyP3OcFuNg9VMpSfpzbVLppJDI1gOy2NoS83yqu1Haaeqe2LnHlDjjlB5iMDIyO3dKUpUdYglKUoiUpSiJSlKIlKUoiV5l2yjG7CCb1f7fB27iRIQgj4E190uU1CivTHzs2whTij7gNzWOWq+XXTNtQ79kV1kqeekznQFb/uJUUpH90CpdLS/iXEZxhbC0BoU62nma+Xw2RgEkDJJJ2A3HY7/AA2Wtlu1N07uz3q9tzeySXN9uVua2T+tdKhaHEBxtaVpUNwpJ3BFYmWmI/cbpDt7G5ckyG2UD3qUAP1rZTT6xO4xg1hx5/8Aylut7EZfXfqlABrlV0opsYOcqZxC0DTaKZA6GoMhkJ2";
 
 let flights = [], metaName = '', metaSig = '';
 let extraCols = []; 
@@ -360,9 +365,7 @@ function fmtDate(str) {
 }
 
 function normalizeReg(r) {
-  let val = (r || '').toUpperCase();
-  if (['JXI', 'JXM', '5Y-JXI', '5Y-JXM'].includes(val)) return 'GROUP-JXI-JXM';
-  return val;
+  return (r || '').toUpperCase().trim();
 }
 
 function showToast(msg) {
@@ -532,7 +535,7 @@ function parseRows(rows, filename) {
   document.getElementById('statsWrap').style.display = 'block';
   document.getElementById('filterBar').style.display = 'flex';
   
-  const enableIds = ['btnSort','btnXlsx','btnPdf','btnAddRow','btnAddCol','btnSimpleSort'];
+  const enableIds = ['btnSort','btnXlsx','btnPdf','btnAddRow','btnAddCol','btnSimpleSort','btnCopyTable'];
   enableIds.forEach(id => document.getElementById(id).disabled = false);
   document.getElementById('livePill').style.display = 'inline-block';
   
@@ -547,7 +550,7 @@ function clearAll() {
   sortCol = null; sortDir = 'asc'; filterText = ''; filterColKey = '';
   dz.style.display = 'block';
   ['fileInfo','statsWrap','filterBar'].forEach(id => document.getElementById(id).style.display = 'none');
-  ['btnSort','btnXlsx','btnPdf','btnAddRow','btnAddCol','btnSimpleSort'].forEach(id => document.getElementById(id).disabled = true);
+  ['btnSort','btnXlsx','btnPdf','btnAddRow','btnAddCol','btnSimpleSort','btnCopyTable'].forEach(id => document.getElementById(id).disabled = true);
   document.getElementById('livePill').style.display = 'none';
   document.getElementById('emptyState').style.display = 'flex';
   document.getElementById('rplPreview').innerHTML = '';
@@ -642,7 +645,9 @@ function renderPreview() {
   const preview = document.getElementById('rplPreview');
   preview.innerHTML = `
     <div class="rpl-doc">
-      <div class="rpl-banner"><img src="${LOGO_SRC}" id="logoImg" alt="Jambojet"></div>
+      <div class="rpl-banner">
+        <img src="${LOGO_SRC}" alt="Jambojet" style="height:52px; object-fit:contain;">
+      </div>
       <div class="rpl-title">${title}</div>
       <table class="rpl-table" id="editableTable">
         <thead><tr>${thHtml}</tr></thead>
@@ -650,12 +655,6 @@ function renderPreview() {
       </table>
       <div class="rpl-footer">NAME &nbsp;&nbsp;: &nbsp;&nbsp;${nameVal}<br>SIGNATURE &nbsp;: &nbsp;&nbsp;${sigVal}</div>
     </div>`;
-
-  // Try to load local logo if available
-  const imgEl = document.getElementById('logoImg');
-  const testImg = new Image();
-  testImg.onload = () => imgEl.src = 'JJlogo.jpeg';
-  testImg.src = 'JJlogo.jpeg';
 
   attachEvents();
 }
@@ -768,6 +767,11 @@ function attachEvents() {
     e.preventDefault();
     ctxRow = +td.getAttribute('data-oi'); ctxTd = td;
     const m = document.getElementById('ctxMenu');
+    
+    // Toggle Remove Spacer visibility
+    const remSpacer = document.getElementById('ctxRemSpacer');
+    if (remSpacer) remSpacer.style.display = spacers.has(ctxRow) ? 'flex' : 'none';
+
     let x = e.clientX, y = e.clientY;
     if (x + 200 > window.innerWidth) x = window.innerWidth - 200;
     if (y + 260 > window.innerHeight) y = window.innerHeight - 260;
@@ -844,7 +848,15 @@ document.getElementById('btnClearFilter').addEventListener('click', () => {
   document.getElementById('filterCol').value = '';
   renderPreview();
 });
-document.getElementById('btnAddSpacer').addEventListener('click', () => { if (flights.length) { spacers.add(flights.length); renderPreview(); } });
+document.getElementById('btnAddSpacer').addEventListener('click', () => { 
+  if (flights.length) { 
+    const filtered = getFiltered();
+    if(filtered.length > 0) {
+        spacers.add(filtered[filtered.length-1]._i);
+        renderPreview();
+    }
+  } 
+});
 
 // Context Menu handlers
 document.addEventListener('click', () => document.getElementById('ctxMenu').classList.remove('show'));
@@ -906,16 +918,71 @@ document.getElementById('ctxPasteRow').addEventListener('click', () => {
   if (clipRow && ctxRow >= 0) { flights.splice(ctxRow + 1, 0, JSON.parse(JSON.stringify(clipRow))); updateStats(); renderPreview(); }
 });
 document.getElementById('ctxInsAbove').addEventListener('click', () => {
-  flights.splice(ctxRow, 0, { callSign:'', reg:'', type:'', dep:'', dest:'', altn:'', eobt:'', qbd:'', rvsm:'-', tcas:'', captain:'', extras: extraCols.map(()=>'') });
-  updateStats(); renderPreview();
+  if (ctxRow >= 0) {
+    const newRow = { callSign:'', reg:'', type:'', dep:'', dest:'', altn:'', eobt:'', qbd:'', rvsm:'-', tcas:'', captain:'', extras: extraCols.map(()=>'') };
+    flights.splice(ctxRow, 0, newRow);
+    updateStats(); renderPreview();
+    showToast('✓ Row inserted above');
+  }
 });
 document.getElementById('ctxInsBelow').addEventListener('click', () => {
-  flights.splice(ctxRow + 1, 0, { callSign:'', reg:'', type:'', dep:'', dest:'', altn:'', eobt:'', qbd:'', rvsm:'-', tcas:'', captain:'', extras: extraCols.map(()=>'') });
-  updateStats(); renderPreview();
+  if (ctxRow >= 0) {
+    const newRow = { callSign:'', reg:'', type:'', dep:'', dest:'', altn:'', eobt:'', qbd:'', rvsm:'-', tcas:'', captain:'', extras: extraCols.map(()=>'') };
+    flights.splice(ctxRow + 1, 0, newRow);
+    updateStats(); renderPreview();
+    showToast('✓ Row inserted below');
+  }
 });
 document.getElementById('ctxInsSpacer').addEventListener('click', () => { if (ctxRow >= 0) { spacers.add(ctxRow); renderPreview(); } });
 document.getElementById('ctxRemSpacer').addEventListener('click', () => { if (ctxRow >= 0) { spacers.delete(ctxRow); renderPreview(); } });
-document.getElementById('ctxDelRow').addEventListener('click', () => { if (ctxRow >= 0 && flights.length > 1) { flights.splice(ctxRow, 1); updateStats(); renderPreview(); } });
+document.getElementById('ctxClearCell').addEventListener('click', () => {
+  if (ctxTd && ctxRow >= 0) {
+    const field = ctxTd.getAttribute('data-field');
+    if (field.startsWith('extra_')) {
+      const exi = parseInt(field.split('_')[1]);
+      flights[ctxRow].extras[exi] = '';
+    } else {
+      flights[ctxRow][field] = '';
+    }
+    renderPreview();
+    showToast('✓ Cell cleared');
+  }
+});
+document.getElementById('ctxDelRow').addEventListener('click', () => { 
+  if (ctxRow >= 0 && flights.length > 1) { 
+    flights.splice(ctxRow, 1); 
+    updateStats(); renderPreview(); 
+    showToast('✓ Row deleted');
+  } 
+});
+document.getElementById('ctxDelCol').addEventListener('click', () => {
+  if (ctxTd) {
+    const field = ctxTd.getAttribute('data-field');
+    if (field.startsWith('extra_')) {
+      const exi = parseInt(field.split('_')[1]);
+      extraCols.splice(exi, 1);
+      flights.forEach(f => { if (f.extras) f.extras.splice(exi, 1); });
+      populateSimpleSortOptions();
+      renderPreview();
+      showToast('✓ Column deleted');
+    } else {
+      showToast('Cannot delete base columns.');
+    }
+  }
+});
+
+// Sidebar copy table
+document.getElementById('btnCopyTable').addEventListener('click', () => {
+    const filtered = getFiltered();
+    const headers = BASE_LABELS.concat(extraCols.map(c => c.label)).join('\t');
+    const rows = filtered.map(f => {
+        const row = BASE_FIELDS.map(k => f[k]);
+        extraCols.forEach((_, i) => row.push(f.extras && f.extras[i] || ''));
+        return row.join('\t');
+    }).join('\n');
+    navigator.clipboard.writeText(headers + '\n' + rows);
+    showToast('✓ Entire table copied to clipboard');
+});
 
 // Click on spacer to remove it
 document.getElementById('rplPreview').addEventListener('click', e => {
@@ -929,15 +996,6 @@ document.getElementById('rplPreview').addEventListener('click', e => {
 });
 
 // Sidebar spacer buttons
-document.getElementById('btnAddSpacer').addEventListener('click', () => { 
-  if (flights.length) { 
-    const filtered = getFiltered();
-    if(filtered.length > 0) {
-        spacers.add(filtered[filtered.length-1]._i);
-        renderPreview();
-    }
-  } 
-});
 document.getElementById('btnClearSpacers').addEventListener('click', () => {
   if (spacers.size > 0 && confirm('Clear all manually added spacers?')) {
     spacers.clear();
@@ -953,6 +1011,7 @@ document.getElementById('btnXlsx').addEventListener('click', async () => {
   const sigVal = document.getElementById('prepSig').value;
   const title = 'JAMBOJET REPETITIVE ACTIVATION LIST FOR ' + fmtDate(ds);
   const headers = BASE_LABELS.concat(extraCols.map(c => c.label));
+  const filteredData = getFiltered();
 
   if (window.ExcelJS && window.saveAs) {
     try {
@@ -961,39 +1020,58 @@ document.getElementById('btnXlsx').addEventListener('click', async () => {
 
       // Logo
       try {
-        const resp = await fetch('JJlogo.jpeg');
-        let base64;
-        if (resp.ok) {
-          const blob = await resp.blob();
-          base64 = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
-        } else {
-          base64 = LOGO_SRC.split(',')[1];
+        // Default to embedded base64 so export works without fetching the file (e.g., file:// or offline).
+        let base64 = LOGO_SRC.split(',')[1];
+        try {
+          const resp = await fetch('JJlogo.jpeg');
+          if (resp.ok) {
+            const blob = await resp.blob();
+            base64 = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
+          }
+        } catch(e) {
+          // ignore fetch errors and use embedded LOGO_SRC
         }
         const imgId = wb.addImage({ base64, extension: 'jpeg' });
-        ws.addImage(imgId, { tl: { col: 0, row: 0 }, ext: { width: 160, height: 40 } });
+        ws.addImage(imgId, { tl: { col: 0, row: 0 }, ext: { width: 140, height: 45 } });
       } catch(e) {}
 
-      ws.mergeCells(1, 1, 1, headers.length);
-      ws.getCell(1, 1).value = title;
-      ws.getCell(1, 1).alignment = { horizontal: 'center' };
-      ws.getRow(1).font = { bold: true, size: 12 };
-      ws.addRow([]);
-      ws.addRow(headers);
-      ws.getRow(3).font = { bold: true };
+      // Title row (pushed down slightly to not overlap logo)
+      ws.mergeCells(2, 1, 2, headers.length);
+      ws.getCell(2, 1).value = title;
+      ws.getCell(2, 1).alignment = { horizontal: 'center' };
+      ws.getRow(2).font = { bold: true, size: 12 };
+      
+      ws.addRow([]); // Row 3
+      ws.addRow(headers); // Row 4
+      const headerRow = ws.getRow(4);
+      headerRow.font = { bold: true };
+      headerRow.eachCell(cell => {
+        cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+      });
 
       let prev = null;
-      flights.forEach(f => {
+      filteredData.forEach(f => {
         const crn = normalizeReg(f.reg);
         if (prev !== null && crn !== prev) ws.addRow([]);
         const row = BASE_FIELDS.map(k => f[k]);
         extraCols.forEach((_, i) => row.push(f.extras && f.extras[i] || ''));
-        ws.addRow(row);
+        const addedRow = ws.addRow(row);
+        addedRow.eachCell(cell => {
+            cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+        });
         prev = crn;
       });
 
       ws.addRow([]);
-      ws.addRow([`NAME  :  ${nameVal}`]);
-      ws.addRow([`SIGNATURE  :  ${sigVal}`]);
+      const footer1 = ws.addRow([`NAME  :  ${nameVal}`]);
+      footer1.font = { bold: true };
+      const footer2 = ws.addRow([`SIGNATURE  :  ${sigVal}`]);
+      footer2.font = { bold: true };
+
+      // Column widths
+      for (let i = 0; i < headers.length; i++) {
+          ws.getColumn(i+1).width = 15;
+      }
 
       const buf = await wb.xlsx.writeBuffer();
       saveAs(new Blob([buf]), `JMA_RPL_${ds}.xlsx`);
@@ -1005,32 +1083,55 @@ document.getElementById('btnXlsx').addEventListener('click', async () => {
 });
 
 document.getElementById('btnPdf').addEventListener('click', () => {
-  const { jsPDF } = window.jspdf;
-  const ds = document.getElementById('rplDate').value;
-  const nameVal = document.getElementById('prepName').value;
-  const sigVal = document.getElementById('prepSig').value;
-  const title = 'JAMBOJET REPETITIVE ACTIVATION LIST FOR ' + fmtDate(ds);
-  const headers = BASE_LABELS.concat(extraCols.map(c => c.label));
+  try {
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF) {
+      showToast('Error: jsPDF library not found. Check your internet connection.');
+      return;
+    }
 
-  const generate = (imgData) => {
+    const ds = document.getElementById('rplDate').value;
+    const nameVal = document.getElementById('prepName').value;
+    const sigVal = document.getElementById('prepSig').value;
+    const title = 'JAMBOJET REPETITIVE ACTIVATION LIST FOR ' + fmtDate(ds);
+    const headers = BASE_LABELS.concat(extraCols.map(c => c.label));
+    const filteredData = getFiltered();
+
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const W = 297, M = 8;
-    if (imgData) try { doc.addImage(imgData, 'JPEG', W/2-25, 5, 50, 15); } catch(e) {}
-    doc.setFontSize(8); doc.text(title, W/2, 25, { align: 'center' });
+
+    // Use the full validated base64 logo
+    try {
+        doc.addImage(LOGO_SRC, 'JPEG', W/2 - 25, 5, 50, 15);
+    } catch(e) { console.warn("PDF Logo failed", e); }
+    
+    doc.setFontSize(8);
+    doc.setTextColor(0,0,0);
+    doc.text(title, W/2, 25, { align: 'center' });
     
     const body = [];
     let prev = null;
-    flights.forEach(f => {
+    filteredData.forEach(f => {
       const crn = normalizeReg(f.reg);
-      if (prev !== null && crn !== prev) body.push([{ content: '', colSpan: headers.length, styles: { fillColor: [240, 240, 240], minCellHeight: 2 } }]);
+      if (prev !== null && crn !== prev) {
+        body.push([{ content: '', colSpan: headers.length, styles: { fillColor: [240, 240, 240], minCellHeight: 2 } }]);
+      }
       const row = BASE_FIELDS.map(k => f[k]);
       extraCols.forEach((_, i) => row.push(f.extras && f.extras[i] || ''));
       body.push(row);
       prev = crn;
     });
 
+    if (typeof doc.autoTable !== 'function') {
+        showToast('Error: autoTable plugin not loaded.');
+        return;
+    }
+
     doc.autoTable({
-      head: [headers], body, startY: 28, margin: { left: M, right: M },
+      head: [headers],
+      body,
+      startY: 28,
+      margin: { left: M, right: M },
       styles: { fontSize: 6.5, cellPadding: 1.2, lineWidth: 0.1, lineColor: [0,0,0] },
       headStyles: { fillColor: [255, 255, 255], textColor: [0,0,0], fontStyle: 'bold' }
     });
@@ -1039,12 +1140,12 @@ document.getElementById('btnPdf').addEventListener('click', () => {
     doc.text(`NAME : ${nameVal}`, M, fy);
     doc.text(`SIGNATURE : ${sigVal}`, M, fy+5);
     doc.save(`JMA_RPL_${ds}.pdf`);
-  };
+    showToast('✓ PDF downloaded!');
 
-  const img = new Image();
-  img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0,0); generate(c.toDataURL('image/jpeg')); };
-  img.onerror = () => generate(LOGO_SRC);
-  img.src = 'JJlogo.jpeg';
+  } catch (err) {
+    console.error(err);
+    showToast('PDF export failed: ' + err.message);
+  }
 });
 
 ['rplDate','prepName','prepSig'].forEach(id => document.getElementById(id).addEventListener('input', renderPreview));
