@@ -340,6 +340,28 @@ th:not(.sort-asc):not(.sort-desc) .sort-icon::after{content:"⇅"}
 const LOGO_SRC = "data:image/jpeg;base64,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";
 
 let flights = [], metaName = '', metaSig = '';
+
+// EFFECTIVE LOGO: start with embedded LOGO_SRC, override if external file loads
+window.EFFECTIVE_LOGO = window.EFFECTIVE_LOGO || (typeof LOGO_SRC !== 'undefined' ? LOGO_SRC : '');
+(function(){
+  try {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = function(){
+      try {
+        const c = document.createElement('canvas');
+        c.width = this.naturalWidth || this.width;
+        c.height = this.naturalHeight || this.height;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(this,0,0);
+        window.EFFECTIVE_LOGO = c.toDataURL('image/jpeg');
+        if (typeof renderPreview === 'function') renderPreview();
+      } catch(e){}
+    };
+    img.onerror = function(){};
+    img.src = 'JJlogo.jpeg';
+  } catch(e){}
+})();
 let extraCols = []; 
 let sortCol = null, sortDir = 'asc';
 let filterText = '', filterColKey = '';
@@ -646,7 +668,7 @@ function renderPreview() {
   preview.innerHTML = `
     <div class="rpl-doc">
       <div class="rpl-banner">
-        <img src="${LOGO_SRC}" alt="Jambojet" style="height:52px; object-fit:contain;">
+        <img src="${(window.EFFECTIVE_LOGO || LOGO_SRC)}" alt="Jambojet" style="height:52px; object-fit:contain;">
       </div>
       <div class="rpl-title">${title}</div>
       <table class="rpl-table" id="editableTable">
@@ -1021,7 +1043,7 @@ document.getElementById('btnXlsx').addEventListener('click', async () => {
       // Logo
       try {
         // Default to embedded base64 so export works without fetching the file (e.g., file:// or offline).
-        let base64 = LOGO_SRC.split(',')[1];
+        let base64 = (window.EFFECTIVE_LOGO || LOGO_SRC).split(',')[1];
         try {
           const resp = await fetch('JJlogo.jpeg');
           if (resp.ok) {
@@ -1102,7 +1124,7 @@ document.getElementById('btnPdf').addEventListener('click', () => {
 
     // Use the full validated base64 logo
     try {
-        doc.addImage(LOGO_SRC, 'JPEG', W/2 - 25, 5, 50, 15);
+        doc.addImage(window.EFFECTIVE_LOGO || LOGO_SRC, 'JPEG', W/2 - 25, 5, 50, 15);
     } catch(e) { console.warn("PDF Logo failed", e); }
     
     doc.setFontSize(8);
