@@ -146,6 +146,8 @@ th:not(.sort-asc):not(.sort-desc) .sort-icon::after{content:"⇅"}
 .rpl-table tbody tr.sep td{height:16px;padding:0;border:none;background:transparent}
 .rpl-table tbody tr.sep-added td{height:8px;padding:0;border:none;background:#ddd;font-size:6px;color:#999;text-align:center;letter-spacing:2px;transition:all .2s;}
 .rpl-table tbody tr.sep-added:hover td{background:#bbb;color:#333;cursor:pointer;}
+.rpl-table tbody tr.spacer-row td{background:#f7f7f7;color:#666;border-style:dashed}
+.rpl-table tbody tr.spacer-row td:focus{background:#fff;color:#000}
 
 .rpl-table tbody tr.dr td{padding:4px;text-align:center;color:#000;border:1px solid #bbb}
 .rpl-table tbody tr.dr td:last-child{text-align:left;font-weight:700;padding-left:6px}
@@ -278,6 +280,12 @@ th:not(.sort-asc):not(.sort-desc) .sort-icon::after{content:"⇅"}
           </div>
         </div>
 
+        <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+          <label style="font-size:0.6rem; color:var(--muted); letter-spacing:1px;">AUTO SPACER AFTER CALL SIGN</label>
+          <input type="number" id="autoSpacerRows" min="0" max="5" value="1" style="width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:0.75rem; padding:0.35rem;">
+          <div style="font-size:0.68rem; color:var(--muted); line-height:1.3;">Inserted as blank editable rows when the call sign changes.</div>
+        </div>
+
         <button class="btn btn-pink" id="btnXlsx" disabled style="margin-top:8px;">⬇ &nbsp;Download Excel (.xlsx)</button>
         <button class="btn btn-ghost" id="btnPdf" disabled>⬇ &nbsp;Download PDF (A4 Landscape)</button>
         <button class="btn btn-ghost" id="btnCopyTable" disabled>📋 Copy Table to Clipboard</button>
@@ -325,6 +333,11 @@ th:not(.sort-asc):not(.sort-desc) .sort-icon::after{content:"⇅"}
         <div class="field"><label>Report Title</label><input type="text" id="tracking-report-title" value="FLIGHT TRACKING REPORT"></div>
         <div class="field"><label>Shift Name</label><input type="text" id="tracking-shift-name" value="-C SHIFT-"></div>
         <div class="field"><label>Report Date</label><input type="date" id="tracking-report-date"></div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+        <label style="font-size:0.6rem; color:var(--muted); letter-spacing:1px;">AUTO SPACER AFTER CALLSIGN</label>
+        <input type="number" id="tracking-autoSpacerRows" min="0" max="5" value="1" style="width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:0.75rem; padding:0.35rem;">
+        <div style="font-size:0.68rem; color:var(--muted); line-height:1.3;">Inserted as blank editable rows when the callsign changes.</div>
       </div>
     </div>
 
@@ -533,11 +546,57 @@ let ctxRow = -1, ctxTd = null;
 let clipRow = null;
 let dragSrc = -1;
 let spacers = new Set(); 
+let autoSpacerRows = 1;
 
 const BASE_FIELDS = ['callSign','reg','type','dep','dest','altn','eobt','qbd','rvsm','tcas','captain'];
 const BASE_LABELS = ['CALL SIGN','REG','TYPE','DEP','DEST','ALTN','EOBT','QBD','RVSM','TCAS','CAPTAIN'];
 
 document.getElementById('rplDate').value = new Date().toISOString().split('T')[0];
+document.getElementById('autoSpacerRows').value = autoSpacerRows;
+document.getElementById('autoSpacerRows').addEventListener('input', e => {
+  autoSpacerRows = Math.max(0, parseInt(e.target.value, 10) || 0);
+  rebuildAutoSpacers();
+  renderPreview();
+});
+
+function makeBlankRplRow(autoSpacer = false) {
+  return {
+    callSign: '',
+    reg: '',
+    type: '',
+    dep: '',
+    dest: '',
+    altn: '',
+    eobt: '',
+    qbd: '',
+    rvsm: '-',
+    tcas: '',
+    captain: '',
+    extras: extraCols.map(() => ''),
+    __autoSpacer: autoSpacer
+  };
+}
+
+function isAutoSpacerRow(row) {
+  return !!(row && row.__autoSpacer);
+}
+
+function rebuildAutoSpacers() {
+  const realRows = flights.filter(row => !isAutoSpacerRow(row));
+  const rebuilt = [];
+  let prevCallSign = null;
+
+  realRows.forEach(row => {
+    const currentCallSign = (row.callSign || '').toString().trim().toUpperCase();
+    if (prevCallSign !== null && currentCallSign !== prevCallSign) {
+      for (let i = 0; i < autoSpacerRows; i++) rebuilt.push(makeBlankRplRow(true));
+    }
+    rebuilt.push(row);
+    prevCallSign = currentCallSign;
+  });
+
+  flights = rebuilt;
+}
 
 // ── UTILS ──────────────────────────────────────────────────────────────────
 function fmtDate(str) {
@@ -744,19 +803,23 @@ function clearAll() {
 }
 
 function updateStats() {
-  document.getElementById('sFlights').textContent = flights.length;
-  document.getElementById('sAircraft').textContent = new Set(flights.map(f => f.reg)).size;
-  document.getElementById('sCaptains').textContent = new Set(flights.map(f => f.captain)).size;
-  document.getElementById('sRoutes').textContent = new Set(flights.map(f => f.dep + f.dest)).size;
+  const realFlights = flights.filter(f => !isAutoSpacerRow(f));
+  document.getElementById('sFlights').textContent = realFlights.length;
+  document.getElementById('sAircraft').textContent = new Set(realFlights.map(f => f.reg)).size;
+  document.getElementById('sCaptains').textContent = new Set(realFlights.map(f => f.captain)).size;
+  document.getElementById('sRoutes').textContent = new Set(realFlights.map(f => f.dep + f.dest)).size;
 }
 
 function defaultSort() {
-  flights.sort((a, b) => {
+  const realFlights = flights.filter(f => !isAutoSpacerRow(f));
+  realFlights.sort((a, b) => {
     const ra = normalizeReg(a.reg), rb = normalizeReg(b.reg);
     if (ra < rb) return -1; if (ra > rb) return 1;
     const oa = (a.reg || '').toUpperCase(), ob = (b.reg || '').toUpperCase();
     return oa < ob ? -1 : oa > ob ? 1 : 0;
   });
+  flights = realFlights;
+  rebuildAutoSpacers();
 }
 
 // ── GET DISPLAYED DATA ───────────────────────────────────────────────────────
@@ -803,24 +866,22 @@ function renderPreview() {
   const COLS = BASE_LABELS.concat(extraCols.map(c => c.label));
   const FIELDS = BASE_FIELDS.concat(extraCols.map((c, i) => `extra_${i}`));
 
-  let tbody = '', prev = null;
+  let tbody = '';
   for (let i = 0; i < filtered.length; i++) {
     const f = filtered[i];
     const oi = f._i;
-    const crn = normalizeReg(f.reg);
-    if (!isFiltered && prev !== null && crn !== prev)
-      tbody += `<tr class="sep"><td colspan="${COLS.length}"></td></tr>`;
-    if (spacers.has(oi))
-      tbody += `<tr class="sep-added" data-oi="${oi}" title="Click to remove spacer"><td colspan="${COLS.length}">• • • SPACER • • •</td></tr>`;
+    const isSpacer = isAutoSpacerRow(f);
+    const rowCls = isSpacer ? 'dr spacer-row' : 'dr';
+    const dragAttr = isSpacer ? '' : 'draggable="true"';
+    const dataAttrs = isSpacer ? `data-oi="${oi}" data-spacer="1"` : `data-oi="${oi}"`;
 
-    tbody += `<tr class="dr" draggable="true" data-oi="${oi}">`;    BASE_FIELDS.forEach(field => {
-      tbody += `<td contenteditable="true" data-oi="${oi}" data-field="${field}">${f[field] || ''}</td>`;
+    tbody += `<tr class="${rowCls}" ${dragAttr} ${dataAttrs}>`;    BASE_FIELDS.forEach(field => {
+      tbody += `<td contenteditable="true" ${dataAttrs} data-field="${field}">${f[field] || ''}</td>`;
     });
     for (let ex = 0; ex < extraCols.length; ex++) {
-      tbody += `<td contenteditable="true" data-oi="${oi}" data-field="extra_${ex}">${f.extras && f.extras[ex] || ''}</td>`;
+      tbody += `<td contenteditable="true" ${dataAttrs} data-field="extra_${ex}">${f.extras && f.extras[ex] || ''}</td>`;
     }
     tbody += `</tr>`;
-    prev = crn;
   }
 
   const thHtml = COLS.map((h, ci) => {
@@ -856,6 +917,7 @@ function attachEvents() {
       const oi = +td.getAttribute('data-oi');
       const field = td.getAttribute('data-field');
       const val = td.textContent.trim();
+      if (flights[oi] && flights[oi].__autoSpacer) flights[oi].__autoSpacer = false;
       if (field.startsWith('extra_')) {
         const exi = parseInt(field.split('_')[1]);
         flights[oi].extras = flights[oi].extras || [];
@@ -864,6 +926,8 @@ function attachEvents() {
         flights[oi][field] = val;
       }
       updateStats();
+      rebuildAutoSpacers();
+      renderPreview();
     }
   });
 
@@ -879,6 +943,7 @@ function attachEvents() {
       const currentDisplayRow = filtered[displayIdx + rOff];
       if (!currentDisplayRow) return;
       const ti = currentDisplayRow._i;
+      if (flights[ti] && flights[ti].__autoSpacer) flights[ti].__autoSpacer = false;
       
       row.forEach((val, cOff) => {
         const tc = sc + cOff;
@@ -895,6 +960,7 @@ function attachEvents() {
         }
       });
     });
+    rebuildAutoSpacers();
     renderPreview();
     showToast('✓ Data pasted');
   }
@@ -939,7 +1005,7 @@ function attachEvents() {
       if (dragSrc !== targetOi) {
         const src = flights.splice(dragSrc, 1)[0];
         flights.splice(targetOi, 0, src);
-        spacers = new Set();
+        rebuildAutoSpacers();
         renderPreview(); showToast('✓ Row moved');
       }
       tbl.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over-row'));
@@ -956,7 +1022,7 @@ function attachEvents() {
     
     // Toggle Remove Spacer visibility
     const remSpacer = document.getElementById('ctxRemSpacer');
-    if (remSpacer) remSpacer.style.display = spacers.has(ctxRow) ? 'flex' : 'none';
+    if (remSpacer) remSpacer.style.display = (flights[ctxRow] && flights[ctxRow].__autoSpacer) ? 'flex' : 'none';
 
     let x = e.clientX, y = e.clientY;
     if (x + 200 > window.innerWidth) x = window.innerWidth - 200;
@@ -970,9 +1036,8 @@ function attachEvents() {
 document.getElementById('btnSort').addEventListener('click', () => { defaultSort(); renderPreview(); showToast('✓ Re-sorted by Registration'); });
 
 document.getElementById('btnAddRow').addEventListener('click', () => {
-  const newRow = { callSign:'', reg:'', type:'', dep:'', dest:'', altn:'', eobt:'', qbd:'', rvsm:'-', tcas:'', captain:'', extras: [] };
-  extraCols.forEach(() => newRow.extras.push(''));
-  flights.push(newRow); updateStats(); renderPreview(); showToast('✓ Row added');
+  const newRow = makeBlankRplRow(false);
+  flights.push(newRow); updateStats(); rebuildAutoSpacers(); renderPreview(); showToast('✓ Row added');
 });
 
 document.getElementById('btnAddCol').addEventListener('click', () => {
@@ -1001,7 +1066,8 @@ document.getElementById('btnSimpleSort').addEventListener('click', () => {
   const FIELDS = BASE_FIELDS.concat(extraCols.map((c, i) => `extra_${i}`));
   const field = FIELDS[colIdx];
 
-  flights.sort((a, b) => {
+  const realFlights = flights.filter(f => !isAutoSpacerRow(f));
+  realFlights.sort((a, b) => {
     const getVal = (obj) => field.startsWith('extra_') ? (obj.extras && obj.extras[parseInt(field.split('_')[1])] || '') : (obj[field] || '');
     let va = getVal(a).toString(), vb = getVal(b).toString();
 
@@ -1022,6 +1088,8 @@ document.getElementById('btnSimpleSort').addEventListener('click', () => {
     const cmp = va.localeCompare(vb, undefined, { sensitivity: 'base', numeric: true });
     return (dir === 'asc' ? 1 : -1) * cmp;
   });
+  flights = realFlights;
+  rebuildAutoSpacers();
   renderPreview(); showToast('✓ Sort applied');
 });
 
@@ -1037,9 +1105,13 @@ document.getElementById('btnClearFilter').addEventListener('click', () => {
 document.getElementById('btnAddSpacer').addEventListener('click', () => { 
   if (flights.length) { 
     const filtered = getFiltered();
-    if(filtered.length > 0) {
-        spacers.add(filtered[filtered.length-1]._i);
-        renderPreview();
+    if (filtered.length > 0) {
+      const oi = filtered[filtered.length - 1]._i;
+      flights.splice(oi + 1, 0, makeBlankRplRow(false));
+      updateStats();
+      rebuildAutoSpacers();
+      renderPreview();
+      showToast('✓ Spacer row added');
     }
   } 
 });
@@ -1108,6 +1180,7 @@ document.getElementById('ctxFillCol').addEventListener('click', () => {
         }
       }
     });
+    if (isTracking) rebuildTrackingAutoSpacers();
     render();
     showToast(`✓ Filled entire column with: ${val}`);
   }
@@ -1121,7 +1194,7 @@ document.getElementById('ctxPaste').addEventListener('click', async () => {
       if (isTracking) {
         // Simple paste for tracking
         let rows = text.split(/\r?\n/).filter(line => line.length > 0).map(l => l.split('\t'));
-        const FIELDS = ['Timestamp', 'UTC', 'Callsign', 'Position', 'Altitude', 'Speed', 'Direction'];
+        const FIELDS = ['Timestamp', 'Date', 'UTC', 'Callsign', 'Position', 'Altitude', 'Speed', 'Direction'];
         const sc = FIELDS.indexOf(ctxTd.getAttribute('data-field'));
         rows.forEach((row, rOff) => {
           if (allTrackingData[ctxRow + rOff]) {
@@ -1137,6 +1210,7 @@ document.getElementById('ctxPaste').addEventListener('click', async () => {
             });
           }
         });
+        rebuildTrackingAutoSpacers();
         renderTrackingTable();
         showToast('✓ Data pasted');
       } else {
@@ -1149,10 +1223,13 @@ document.getElementById('ctxPaste').addEventListener('click', async () => {
 });
 
 document.getElementById('ctxPasteRow').addEventListener('click', () => {
-  const { data, render, updateStats } = getCtxModule();
+  const { isTracking, data, render, updateStats } = getCtxModule();
   if (clipRow && ctxRow >= 0) { 
     data.splice(ctxRow + 1, 0, JSON.parse(JSON.stringify(clipRow))); 
-    updateStats(); render(); 
+    updateStats();
+    if (isTracking) rebuildTrackingAutoSpacers();
+    else rebuildAutoSpacers();
+    render(); 
     showToast('✓ Row pasted below');
   }
 });
@@ -1161,10 +1238,13 @@ document.getElementById('ctxInsAbove').addEventListener('click', () => {
   const { isTracking, data, render, updateStats } = getCtxModule();
   if (ctxRow >= 0) {
     const newRow = isTracking ? 
-      { Timestamp: 0, UTC: '', Callsign: '', Position: '', Altitude: 0, Speed: 0, Direction: 0 } :
-      { callSign:'', reg:'', type:'', dep:'', dest:'', altn:'', eobt:'', qbd:'', rvsm:'-', tcas:'', captain:'', extras: extraCols.map(()=>'') };
+      makeBlankTrackingRow(false) :
+      makeBlankRplRow(false);
     data.splice(ctxRow, 0, newRow);
-    updateStats(); render();
+    updateStats();
+    if (isTracking) rebuildTrackingAutoSpacers();
+    else rebuildAutoSpacers();
+    render();
     showToast('✓ Row inserted above');
   }
 });
@@ -1173,37 +1253,69 @@ document.getElementById('ctxInsBelow').addEventListener('click', () => {
   const { isTracking, data, render, updateStats } = getCtxModule();
   if (ctxRow >= 0) {
     const newRow = isTracking ? 
-      { Timestamp: 0, UTC: '', Callsign: '', Position: '', Altitude: 0, Speed: 0, Direction: 0 } :
-      { callSign:'', reg:'', type:'', dep:'', dest:'', altn:'', eobt:'', qbd:'', rvsm:'-', tcas:'', captain:'', extras: extraCols.map(()=>'') };
+      makeBlankTrackingRow(false) :
+      makeBlankRplRow(false);
     data.splice(ctxRow + 1, 0, newRow);
-    updateStats(); render();
+    updateStats();
+    if (isTracking) rebuildTrackingAutoSpacers();
+    else rebuildAutoSpacers();
+    render();
     showToast('✓ Row inserted below');
   }
 });
 
-document.getElementById('ctxInsSpacer').addEventListener('click', () => { if (ctxRow >= 0) { spacers.add(ctxRow); renderPreview(); } });
-document.getElementById('ctxRemSpacer').addEventListener('click', () => { if (ctxRow >= 0) { spacers.delete(ctxRow); renderPreview(); } });
+document.getElementById('ctxInsSpacer').addEventListener('click', () => {
+  const { isTracking, data, render, updateStats } = getCtxModule();
+  if (ctxRow >= 0) {
+    data.splice(ctxRow + 1, 0, isTracking ? makeBlankTrackingRow(false) : makeBlankRplRow(false));
+    updateStats();
+    if (isTracking) rebuildTrackingAutoSpacers();
+    else rebuildAutoSpacers();
+    render();
+    showToast('✓ Spacer row inserted');
+  }
+});
+document.getElementById('ctxRemSpacer').addEventListener('click', () => {
+  const { isTracking, data, render, updateStats } = getCtxModule();
+  if (ctxRow >= 0 && data[ctxRow]) {
+    const target = data[ctxRow];
+    if (target.__autoSpacer || (isTracking ? isBlankTrackingRow(target) : isBlankRplRow(target))) {
+      data.splice(ctxRow, 1);
+      updateStats();
+      if (isTracking) rebuildTrackingAutoSpacers();
+      else rebuildAutoSpacers();
+      render();
+      showToast('✓ Spacer row removed');
+    }
+  }
+});
 
 document.getElementById('ctxClearCell').addEventListener('click', () => {
   if (ctxTd && ctxRow >= 0) {
     const { isTracking, data, render } = getCtxModule();
     const field = ctxTd.getAttribute('data-field');
+    if (!isTracking && data[ctxRow] && data[ctxRow].__autoSpacer) data[ctxRow].__autoSpacer = false;
     if (!isTracking && field.startsWith('extra_')) {
       const exi = parseInt(field.split('_')[1]);
       data[ctxRow].extras[exi] = '';
     } else {
       data[ctxRow][field] = (isTracking && (field === 'Timestamp' || field === 'Altitude' || field === 'Speed' || field === 'Direction')) ? 0 : '';
     }
+    if (isTracking) rebuildTrackingAutoSpacers();
+    else rebuildAutoSpacers();
     render();
     showToast('✓ Cell cleared');
   }
 });
 
 document.getElementById('ctxDelRow').addEventListener('click', () => { 
-  const { data, render, updateStats } = getCtxModule();
+  const { isTracking, data, render, updateStats } = getCtxModule();
   if (ctxRow >= 0 && data.length > 1) { 
     data.splice(ctxRow, 1); 
-    updateStats(); render(); 
+    updateStats();
+    if (isTracking) rebuildTrackingAutoSpacers();
+    else rebuildAutoSpacers();
+    render(); 
     showToast('✓ Row deleted');
   } 
 });
@@ -1221,6 +1333,7 @@ document.getElementById('ctxDelCol').addEventListener('click', () => {
       extraCols.splice(exi, 1);
       flights.forEach(f => { if (f.extras) f.extras.splice(exi, 1); });
       populateSimpleSortOptions();
+      rebuildAutoSpacers();
       renderPreview();
       showToast('✓ Column deleted');
     } else {
@@ -1244,21 +1357,27 @@ document.getElementById('btnCopyTable').addEventListener('click', () => {
 
 // Click on spacer to remove it
 document.getElementById('rplPreview').addEventListener('click', e => {
-  const tr = e.target.closest('tr.sep-added');
+  const tr = e.target.closest('tr.spacer-row');
   if (tr && tr.hasAttribute('data-oi')) {
     const oi = +tr.getAttribute('data-oi');
-    spacers.delete(oi);
-    renderPreview();
-    showToast('✓ Spacer removed');
+    if (flights[oi]) {
+      flights.splice(oi, 1);
+      updateStats();
+      rebuildAutoSpacers();
+      renderPreview();
+      showToast('✓ Spacer row removed');
+    }
   }
 });
 
 // Sidebar spacer buttons
 document.getElementById('btnClearSpacers').addEventListener('click', () => {
-  if (spacers.size > 0 && confirm('Clear all manually added spacers?')) {
-    spacers.clear();
+  const hasAuto = flights.some(f => f.__autoSpacer);
+  if (hasAuto && confirm('Clear all auto-generated spacer rows?')) {
+    flights = flights.filter(f => !f.__autoSpacer);
+    updateStats();
     renderPreview();
-    showToast('✓ All spacers cleared');
+    showToast('✓ All spacer rows cleared');
   }
 });
 
@@ -1307,17 +1426,13 @@ document.getElementById('btnXlsx').addEventListener('click', async () => {
         cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
       });
 
-      let prev = null;
       filteredData.forEach(f => {
-        const crn = normalizeReg(f.reg);
-        if (prev !== null && crn !== prev) ws.addRow([]);
         const row = BASE_FIELDS.map(k => f[k]);
         extraCols.forEach((_, i) => row.push(f.extras && f.extras[i] || ''));
         const addedRow = ws.addRow(row);
         addedRow.eachCell(cell => {
             cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
         });
-        prev = crn;
       });
 
       ws.addRow([]);
@@ -1368,16 +1483,10 @@ document.getElementById('btnPdf').addEventListener('click', () => {
     doc.text(title, W/2, 25, { align: 'center' });
     
     const body = [];
-    let prev = null;
     filteredData.forEach(f => {
-      const crn = normalizeReg(f.reg);
-      if (prev !== null && crn !== prev) {
-        body.push([{ content: '', colSpan: headers.length, styles: { fillColor: [240, 240, 240], minCellHeight: 2 } }]);
-      }
       const row = BASE_FIELDS.map(k => f[k]);
       extraCols.forEach((_, i) => row.push(f.extras && f.extras[i] || ''));
       body.push(row);
-      prev = crn;
     });
 
     if (typeof doc.autoTable !== 'function') {
@@ -1412,9 +1521,59 @@ document.getElementById('btnPdf').addEventListener('click', () => {
 let allTrackingData = [];
 let tFilterText = '', tFilterColKey = '';
 let tSortCol = null, tSortDir = 'asc';
+let trackingAutoSpacerRows = 1;
 
 const tReportDateInput = document.getElementById('tracking-report-date');
 tReportDateInput.valueAsDate = new Date();
+document.getElementById('tracking-autoSpacerRows').value = trackingAutoSpacerRows;
+document.getElementById('tracking-autoSpacerRows').addEventListener('input', e => {
+  trackingAutoSpacerRows = Math.max(0, parseInt(e.target.value, 10) || 0);
+  rebuildTrackingAutoSpacers();
+  renderTrackingTable();
+});
+
+function makeBlankTrackingRow(autoSpacer = false) {
+  return {
+    Timestamp: 0,
+    Date: '',
+    UTC: '',
+    Callsign: '',
+    Position: '',
+    Altitude: 0,
+    Speed: 0,
+    Direction: 0,
+    __autoSpacer: autoSpacer
+  };
+}
+
+function isTrackingAutoSpacerRow(row) {
+  return !!(row && row.__autoSpacer);
+}
+
+function isBlankTrackingRow(row) {
+  if (!row) return false;
+  const fields = ['Timestamp', 'Date', 'UTC', 'Callsign', 'Position', 'Altitude', 'Speed', 'Direction'];
+  return fields.every(k => !(row[k] || '').toString().trim()) || (
+    !row.Callsign && !row.Position && !row.Date && !row.UTC && !row.Timestamp && !row.Altitude && !row.Speed && !row.Direction
+  );
+}
+
+function rebuildTrackingAutoSpacers() {
+  const realRows = allTrackingData.filter(row => !isTrackingAutoSpacerRow(row));
+  const rebuilt = [];
+  let prevCallSign = null;
+
+  realRows.forEach(row => {
+    const currentCallSign = (row.Callsign || '').toString().trim().toUpperCase();
+    if (prevCallSign !== null && currentCallSign !== prevCallSign) {
+      for (let i = 0; i < trackingAutoSpacerRows; i++) rebuilt.push(makeBlankTrackingRow(true));
+    }
+    rebuilt.push(row);
+    prevCallSign = currentCallSign;
+  });
+
+  allTrackingData = rebuilt;
+}
 
 const tDz = document.getElementById('tracking-drop-zone');
 tDz.addEventListener('dragover', e => { e.preventDefault(); tDz.classList.add('drag-over'); });
@@ -1435,6 +1594,7 @@ async function handleTrackingFiles(files) {
   
   const results = await Promise.all(fileArray.map(f => parseTrackingFile(f)));
   allTrackingData = [...allTrackingData, ...results.flat()].sort((a, b) => a.Timestamp - b.Timestamp);
+  rebuildTrackingAutoSpacers();
   
   updateTrackingUI();
 }
@@ -1462,14 +1622,14 @@ function normalizeTrackingData(data) {
       const foundKey = Object.keys(r).find(k => k.toLowerCase() === key.toLowerCase());
       return foundKey ? r[foundKey] : null;
     };
+    const rawDate = get('Date') || '';
     const rawUTC = get('UTC') || '';
-    let datePart = '', timePart = '';
+    let datePart = rawDate;
+    let timePart = rawUTC;
     if (rawUTC.includes('T')) {
       const parts = rawUTC.split('T');
-      datePart = parts[0];
+      if (!datePart) datePart = parts[0];
       timePart = parts[1].replace('Z', '');
-    } else {
-      timePart = rawUTC;
     }
 
     return {
@@ -1512,17 +1672,18 @@ function getFilteredTracking() {
 
 function updateTrackingUI() {
   document.getElementById('tracking-fiName').textContent = `Tracking Data Loaded`;
-  document.getElementById('tracking-fiCount').textContent = `${allTrackingData.length} records`;
-  document.getElementById('tracking-row-count').textContent = `${allTrackingData.length} ROWS`;
+  const realRows = allTrackingData.filter(row => !isTrackingAutoSpacerRow(row));
+  document.getElementById('tracking-fiCount').textContent = `${realRows.length} records`;
+  document.getElementById('tracking-row-count').textContent = `${realRows.length} ROWS`;
   
-  if (allTrackingData.length > 0) {
+  if (realRows.length > 0) {
     tDz.style.display = 'none';
     document.getElementById('tracking-emptyState').style.display = 'none';
     document.getElementById('tracking-preview-container').style.display = 'block';
     document.getElementById('tracking-actions').style.display = 'block';
     document.getElementById('tracking-filterBar').style.display = 'flex';
     renderTrackingTable();
-    showToast(`✓ ${allTrackingData.length} records processed`);
+    showToast(`✓ ${realRows.length} records processed`);
   }
 }
 
@@ -1536,13 +1697,19 @@ function renderTrackingTable() {
   document.getElementById('tracking-preview-title').textContent = `${titleBase} : ${shift} FOR ${date}`;
   
   const filtered = getFilteredTracking();
-  document.getElementById('tracking-row-count').textContent = `${filtered.length} ROWS`;
+  const realCount = filtered.filter(r => !isTrackingAutoSpacerRow(r)).length;
+  document.getElementById('tracking-row-count').textContent = `${realCount} ROWS`;
 
-  tbody.innerHTML = filtered.slice(0, 150).map((r) => `
-    <tr class="dr" draggable="true" data-oi="${r._i}" data-module="tracking">
-      ${FIELDS.map(f => `<td contenteditable="true" data-oi="${r._i}" data-field="${f}">${r[f] || ''}</td>`).join('')}
-    </tr>
-  `).join('');
+  tbody.innerHTML = filtered.slice(0, 150).map((r) => {
+    const isSpacer = isTrackingAutoSpacerRow(r);
+    const rowCls = isSpacer ? 'dr spacer-row' : 'dr';
+    const dragAttr = isSpacer ? '' : 'draggable="true"';
+    const dataAttrs = isSpacer ? `data-oi="${r._i}" data-spacer="1"` : `data-oi="${r._i}"`;
+    return `
+    <tr class="${rowCls}" ${dragAttr} data-module="tracking" ${dataAttrs}>
+      ${FIELDS.map(f => `<td contenteditable="true" ${dataAttrs} data-field="${f}">${r[f] || ''}</td>`).join('')}
+    </tr>`;
+  }).join('');
   
   attachTrackingEvents();
 }
@@ -1586,6 +1753,7 @@ document.getElementById('tracking-btnSort').addEventListener('click', () => {
     const cmp = va.localeCompare(vb, undefined, { sensitivity: 'base', numeric: true });
     return (dir === 'asc' ? 1 : -1) * cmp;
   });
+  rebuildTrackingAutoSpacers();
   renderTrackingTable(); showToast('✓ Sort applied to tracking');
 });
 
@@ -1614,11 +1782,14 @@ function attachTrackingEvents() {
       const oi = +td.getAttribute('data-oi');
       const field = td.getAttribute('data-field');
       const val = td.textContent.trim();
+      if (allTrackingData[oi] && allTrackingData[oi].__autoSpacer) allTrackingData[oi].__autoSpacer = false;
       if (field === 'Timestamp' || field === 'Altitude' || field === 'Speed' || field === 'Direction') {
         allTrackingData[oi][field] = parseInt(val) || 0;
       } else {
         allTrackingData[oi][field] = val;
       }
+      rebuildTrackingAutoSpacers();
+      renderTrackingTable();
     }
   });
 
@@ -1644,6 +1815,7 @@ function attachTrackingEvents() {
       if (dragSrc !== targetOi) {
         const src = allTrackingData.splice(dragSrc, 1)[0];
         allTrackingData.splice(targetOi, 0, src);
+        rebuildTrackingAutoSpacers();
         renderTrackingTable();
         showToast('✓ Row moved');
       }
@@ -1663,7 +1835,7 @@ function attachTrackingEvents() {
     
     // Hide RPL specific context items if needed
     const remSpacer = document.getElementById('ctxRemSpacer');
-    if (remSpacer) remSpacer.style.display = 'none';
+    if (remSpacer) remSpacer.style.display = (allTrackingData[ctxRow] && allTrackingData[ctxRow].__autoSpacer) ? 'flex' : 'none';
 
     let x = e.clientX, y = e.clientY;
     if (x + 200 > window.innerWidth) x = window.innerWidth - 200;
@@ -1675,8 +1847,9 @@ function attachTrackingEvents() {
 
 // Add Row handler for tracking
 document.getElementById('tracking-add-row').addEventListener('click', () => {
-  const newRow = { Timestamp: 0, UTC: '', Callsign: '', Position: '', Altitude: 0, Speed: 0, Direction: 0 };
+  const newRow = makeBlankTrackingRow(false);
   allTrackingData.push(newRow);
+  rebuildTrackingAutoSpacers();
   updateTrackingUI();
   showToast('✓ Row added to tracking');
 });
