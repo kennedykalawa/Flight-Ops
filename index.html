@@ -322,6 +322,7 @@ th:not(.sort-asc):not(.sort-desc) .sort-icon::after{content:"⇅"}
     <div>
       <div class="sec-label">02 Report Options</div>
       <div class="fields-group">
+        <div class="field"><label>Report Title</label><input type="text" id="tracking-report-title" value="FLIGHT TRACKING REPORT"></div>
         <div class="field"><label>Shift Name</label><input type="text" id="tracking-shift-name" value="-C SHIFT-"></div>
         <div class="field"><label>Report Date</label><input type="date" id="tracking-report-date"></div>
       </div>
@@ -329,9 +330,38 @@ th:not(.sort-asc):not(.sort-desc) .sort-icon::after{content:"⇅"}
 
     <!-- 03 Actions -->
     <div id="tracking-actions" style="display:none">
-      <div class="sec-label">03 Export Report</div>
+      <div class="sec-label">03 Export & Actions</div>
       <div class="btn-group">
-        <button class="btn btn-pink" id="tracking-export-pdf">⬇ &nbsp;Download PDF Report</button>
+        <button class="btn btn-ghost" id="tracking-add-row">Add Row</button>
+        
+        <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+          <label style="font-size:0.6rem; color:var(--muted); letter-spacing:1px;">ADVANCED SORT</label>
+          <div style="display:flex; gap:4px; align-items:center; flex-wrap: wrap;">
+            <select id="tracking-sortCol" style="flex:1; min-width: 120px;">
+              <option value="Timestamp">Timestamp</option>
+              <option value="Date">Date</option>
+              <option value="UTC">UTC</option>
+              <option value="Callsign">Callsign</option>
+              <option value="Position">Position</option>
+              <option value="Altitude">Altitude</option>
+              <option value="Speed">Speed</option>
+              <option value="Direction">Direction</option>
+            </select>
+            <select id="tracking-sortTransform" style="width:80px;">
+              <option value="none">None</option>
+              <option value="numeric">123</option>
+              <option value="keyword">Keyword</option>
+            </select>
+            <input type="text" id="tracking-sortKeyword" placeholder="Keyword..." style="width:80px; display:none; background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:0.75rem; padding:0.3rem;">
+            <select id="tracking-sortDir" style="width:60px;">
+              <option value="asc">Asc</option>
+              <option value="desc">Desc</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" id="tracking-btnSort" style="flex-shrink: 0;">Sort</button>
+          </div>
+        </div>
+
+        <button class="btn btn-pink" id="tracking-export-pdf" style="margin-top: 8px;">⬇ &nbsp;Download PDF Report</button>
         <button class="btn btn-ghost" id="tracking-export-excel">⬇ &nbsp;Download Excel (.xlsx)</button>
       </div>
     </div>
@@ -380,6 +410,22 @@ th:not(.sort-asc):not(.sort-desc) .sort-icon::after{content:"⇅"}
       <div class="pb-left">
         <span class="pb-label" id="tracking-preview-title">Tracking Data Preview</span>
       </div>
+      <div class="filter-bar" id="tracking-filterBar" style="display:none">
+        <label>FILTER:</label>
+        <input type="text" id="tracking-filterText" placeholder="Search..." style="width:120px">
+        <select id="tracking-filterCol">
+          <option value="">All Columns</option>
+          <option value="Timestamp">Timestamp</option>
+          <option value="Date">Date</option>
+          <option value="UTC">UTC</option>
+          <option value="Callsign">Callsign</option>
+          <option value="Position">Position</option>
+          <option value="Altitude">Altitude</option>
+          <option value="Speed">Speed</option>
+          <option value="Direction">Direction</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" id="tracking-btnClearFilter">✕</button>
+      </div>
       <span class="pb-label" id="tracking-row-count"></span>
     </div>
     <div class="preview-scroll">
@@ -394,6 +440,7 @@ th:not(.sort-asc):not(.sort-desc) .sort-icon::after{content:"⇅"}
              <thead>
                <tr>
                  <th>Timestamp</th>
+                 <th>Date</th>
                  <th>UTC</th>
                  <th>Callsign</th>
                  <th>Position</th>
@@ -999,21 +1046,40 @@ document.getElementById('btnAddSpacer').addEventListener('click', () => {
 
 // Context Menu handlers
 document.addEventListener('click', () => document.getElementById('ctxMenu').classList.remove('show'));
+
+function getCtxModule() {
+  const isTracking = ctxTd && ctxTd.closest('#tracking-table');
+  return {
+    isTracking,
+    data: isTracking ? allTrackingData : flights,
+    render: isTracking ? renderTrackingTable : renderPreview,
+    updateStats: isTracking ? updateTrackingUI : updateStats
+  };
+}
+
 document.getElementById('ctxCopy').addEventListener('click', () => { if (ctxTd) navigator.clipboard.writeText(ctxTd.textContent); });
+
 document.getElementById('ctxCopyRow').addEventListener('click', () => {
-  if (ctxRow >= 0) {
-    clipRow = JSON.parse(JSON.stringify(flights[ctxRow]));
-    const text = BASE_FIELDS.map(f => flights[ctxRow][f]).concat(flights[ctxRow].extras || []).join('\t');
+  const { isTracking, data } = getCtxModule();
+  if (ctxRow >= 0 && data[ctxRow]) {
+    clipRow = JSON.parse(JSON.stringify(data[ctxRow]));
+    let text = '';
+    if (isTracking) {
+      text = ['Timestamp', 'Date', 'UTC', 'Callsign', 'Position', 'Altitude', 'Speed', 'Direction'].map(f => data[ctxRow][f]).join('\t');
+    } else {
+      text = BASE_FIELDS.map(f => data[ctxRow][f]).concat(data[ctxRow].extras || []).join('\t');
+    }
     navigator.clipboard.writeText(text);
     showToast('✓ Row copied');
   }
 });
+
 document.getElementById('ctxCopyCol').addEventListener('click', () => {
   if (ctxTd) {
+    const { isTracking, data } = getCtxModule();
     const field = ctxTd.getAttribute('data-field');
-    const filtered = getFiltered();
-    const colData = filtered.map(f => {
-      if (field.startsWith('extra_')) {
+    const colData = data.map(f => {
+      if (!isTracking && field.startsWith('extra_')) {
         const exi = parseInt(field.split('_')[1]);
         return (f.extras && f.extras[exi] || '');
       }
@@ -1026,18 +1092,23 @@ document.getElementById('ctxCopyCol').addEventListener('click', () => {
 
 document.getElementById('ctxFillCol').addEventListener('click', () => {
   if (ctxTd) {
+    const { isTracking, data, render } = getCtxModule();
     const field = ctxTd.getAttribute('data-field');
     const val = ctxTd.textContent.trim();
-    flights.forEach(f => {
-      if (field.startsWith('extra_')) {
+    data.forEach(f => {
+      if (!isTracking && field.startsWith('extra_')) {
         const exi = parseInt(field.split('_')[1]);
         f.extras = f.extras || [];
         f.extras[exi] = val;
       } else {
-        f[field] = val;
+        if (isTracking && (field === 'Timestamp' || field === 'Altitude' || field === 'Speed' || field === 'Direction')) {
+          f[field] = parseInt(val) || 0;
+        } else {
+          f[field] = val;
+        }
       }
     });
-    renderPreview();
+    render();
     showToast(`✓ Filled entire column with: ${val}`);
   }
 });
@@ -1046,7 +1117,31 @@ document.getElementById('ctxPaste').addEventListener('click', async () => {
   if (ctxTd) {
     try {
       const text = await navigator.clipboard.readText();
-      processPaste(text, +ctxTd.getAttribute('data-oi'), ctxTd.getAttribute('data-field'));
+      const { isTracking } = getCtxModule();
+      if (isTracking) {
+        // Simple paste for tracking
+        let rows = text.split(/\r?\n/).filter(line => line.length > 0).map(l => l.split('\t'));
+        const FIELDS = ['Timestamp', 'UTC', 'Callsign', 'Position', 'Altitude', 'Speed', 'Direction'];
+        const sc = FIELDS.indexOf(ctxTd.getAttribute('data-field'));
+        rows.forEach((row, rOff) => {
+          if (allTrackingData[ctxRow + rOff]) {
+            row.forEach((val, cOff) => {
+              if (sc + cOff < FIELDS.length) {
+                const field = FIELDS[sc + cOff];
+                if (field === 'Timestamp' || field === 'Altitude' || field === 'Speed' || field === 'Direction') {
+                  allTrackingData[ctxRow + rOff][field] = parseInt(val) || 0;
+                } else {
+                  allTrackingData[ctxRow + rOff][field] = val;
+                }
+              }
+            });
+          }
+        });
+        renderTrackingTable();
+        showToast('✓ Data pasted');
+      } else {
+        processPaste(text, +ctxTd.getAttribute('data-oi'), ctxTd.getAttribute('data-field'));
+      }
     } catch (err) {
       showToast('Clipboard access denied');
     }
@@ -1054,48 +1149,72 @@ document.getElementById('ctxPaste').addEventListener('click', async () => {
 });
 
 document.getElementById('ctxPasteRow').addEventListener('click', () => {
-  if (clipRow && ctxRow >= 0) { flights.splice(ctxRow + 1, 0, JSON.parse(JSON.stringify(clipRow))); updateStats(); renderPreview(); }
+  const { data, render, updateStats } = getCtxModule();
+  if (clipRow && ctxRow >= 0) { 
+    data.splice(ctxRow + 1, 0, JSON.parse(JSON.stringify(clipRow))); 
+    updateStats(); render(); 
+    showToast('✓ Row pasted below');
+  }
 });
+
 document.getElementById('ctxInsAbove').addEventListener('click', () => {
+  const { isTracking, data, render, updateStats } = getCtxModule();
   if (ctxRow >= 0) {
-    const newRow = { callSign:'', reg:'', type:'', dep:'', dest:'', altn:'', eobt:'', qbd:'', rvsm:'-', tcas:'', captain:'', extras: extraCols.map(()=>'') };
-    flights.splice(ctxRow, 0, newRow);
-    updateStats(); renderPreview();
+    const newRow = isTracking ? 
+      { Timestamp: 0, UTC: '', Callsign: '', Position: '', Altitude: 0, Speed: 0, Direction: 0 } :
+      { callSign:'', reg:'', type:'', dep:'', dest:'', altn:'', eobt:'', qbd:'', rvsm:'-', tcas:'', captain:'', extras: extraCols.map(()=>'') };
+    data.splice(ctxRow, 0, newRow);
+    updateStats(); render();
     showToast('✓ Row inserted above');
   }
 });
+
 document.getElementById('ctxInsBelow').addEventListener('click', () => {
+  const { isTracking, data, render, updateStats } = getCtxModule();
   if (ctxRow >= 0) {
-    const newRow = { callSign:'', reg:'', type:'', dep:'', dest:'', altn:'', eobt:'', qbd:'', rvsm:'-', tcas:'', captain:'', extras: extraCols.map(()=>'') };
-    flights.splice(ctxRow + 1, 0, newRow);
-    updateStats(); renderPreview();
+    const newRow = isTracking ? 
+      { Timestamp: 0, UTC: '', Callsign: '', Position: '', Altitude: 0, Speed: 0, Direction: 0 } :
+      { callSign:'', reg:'', type:'', dep:'', dest:'', altn:'', eobt:'', qbd:'', rvsm:'-', tcas:'', captain:'', extras: extraCols.map(()=>'') };
+    data.splice(ctxRow + 1, 0, newRow);
+    updateStats(); render();
     showToast('✓ Row inserted below');
   }
 });
+
 document.getElementById('ctxInsSpacer').addEventListener('click', () => { if (ctxRow >= 0) { spacers.add(ctxRow); renderPreview(); } });
 document.getElementById('ctxRemSpacer').addEventListener('click', () => { if (ctxRow >= 0) { spacers.delete(ctxRow); renderPreview(); } });
+
 document.getElementById('ctxClearCell').addEventListener('click', () => {
   if (ctxTd && ctxRow >= 0) {
+    const { isTracking, data, render } = getCtxModule();
     const field = ctxTd.getAttribute('data-field');
-    if (field.startsWith('extra_')) {
+    if (!isTracking && field.startsWith('extra_')) {
       const exi = parseInt(field.split('_')[1]);
-      flights[ctxRow].extras[exi] = '';
+      data[ctxRow].extras[exi] = '';
     } else {
-      flights[ctxRow][field] = '';
+      data[ctxRow][field] = (isTracking && (field === 'Timestamp' || field === 'Altitude' || field === 'Speed' || field === 'Direction')) ? 0 : '';
     }
-    renderPreview();
+    render();
     showToast('✓ Cell cleared');
   }
 });
+
 document.getElementById('ctxDelRow').addEventListener('click', () => { 
-  if (ctxRow >= 0 && flights.length > 1) { 
-    flights.splice(ctxRow, 1); 
-    updateStats(); renderPreview(); 
+  const { data, render, updateStats } = getCtxModule();
+  if (ctxRow >= 0 && data.length > 1) { 
+    data.splice(ctxRow, 1); 
+    updateStats(); render(); 
     showToast('✓ Row deleted');
   } 
 });
+
 document.getElementById('ctxDelCol').addEventListener('click', () => {
   if (ctxTd) {
+    const { isTracking } = getCtxModule();
+    if (isTracking) {
+      showToast('Cannot delete base columns in Tracking.');
+      return;
+    }
     const field = ctxTd.getAttribute('data-field');
     if (field.startsWith('extra_')) {
       const exi = parseInt(field.split('_')[1]);
@@ -1291,6 +1410,9 @@ document.getElementById('btnPdf').addEventListener('click', () => {
 
 // ── TRACKING REPORT MODULE ─────────────────────────────────────────────────
 let allTrackingData = [];
+let tFilterText = '', tFilterColKey = '';
+let tSortCol = null, tSortDir = 'asc';
+
 const tReportDateInput = document.getElementById('tracking-report-date');
 tReportDateInput.valueAsDate = new Date();
 
@@ -1340,9 +1462,20 @@ function normalizeTrackingData(data) {
       const foundKey = Object.keys(r).find(k => k.toLowerCase() === key.toLowerCase());
       return foundKey ? r[foundKey] : null;
     };
+    const rawUTC = get('UTC') || '';
+    let datePart = '', timePart = '';
+    if (rawUTC.includes('T')) {
+      const parts = rawUTC.split('T');
+      datePart = parts[0];
+      timePart = parts[1].replace('Z', '');
+    } else {
+      timePart = rawUTC;
+    }
+
     return {
       Timestamp: parseInt(get('Timestamp')) || 0,
-      UTC: get('UTC') || '',
+      Date: datePart,
+      UTC: timePart,
       Callsign: get('Callsign') || '',
       Position: get('Position') || '',
       Altitude: get('Altitude') || 0,
@@ -1350,6 +1483,31 @@ function normalizeTrackingData(data) {
       Direction: get('Direction') || 0
     };
   }).filter(r => r.Timestamp > 0);
+}
+
+function getFilteredTracking() {
+  let res = allTrackingData.map((r, i) => ({ ...r, _i: i }));
+  
+  if (tFilterText || tFilterColKey) {
+    const q = tFilterText.toLowerCase();
+    res = res.filter(r => {
+      if (tFilterColKey) {
+        return (r[tFilterColKey] || '').toString().toLowerCase().includes(q);
+      }
+      return ['Timestamp', 'Date', 'UTC', 'Callsign', 'Position', 'Altitude', 'Speed', 'Direction'].some(k => (r[k] || '').toString().toLowerCase().includes(q));
+    });
+  }
+  
+  if (tSortCol !== null) {
+    res.sort((a, b) => {
+      const va = (a[tSortCol] || '').toString().toLowerCase();
+      const vb = (b[tSortCol] || '').toString().toLowerCase();
+      const cmp = va.localeCompare(vb, undefined, { sensitivity: 'base', numeric: true });
+      return (tSortDir === 'asc' ? 1 : -1) * cmp;
+    });
+  }
+  
+  return res;
 }
 
 function updateTrackingUI() {
@@ -1362,6 +1520,7 @@ function updateTrackingUI() {
     document.getElementById('tracking-emptyState').style.display = 'none';
     document.getElementById('tracking-preview-container').style.display = 'block';
     document.getElementById('tracking-actions').style.display = 'block';
+    document.getElementById('tracking-filterBar').style.display = 'flex';
     renderTrackingTable();
     showToast(`✓ ${allTrackingData.length} records processed`);
   }
@@ -1369,18 +1528,158 @@ function updateTrackingUI() {
 
 function renderTrackingTable() {
   const tbody = document.querySelector('#tracking-table tbody');
-  tbody.innerHTML = allTrackingData.slice(0, 150).map(r => `
-    <tr class="dr">
-      <td>${r.Timestamp}</td>
-      <td>${r.UTC}</td>
-      <td>${r.Callsign}</td>
-      <td>${r.Position}</td>
-      <td>${r.Altitude}</td>
-      <td>${r.Speed}</td>
-      <td>${r.Direction}</td>
+  const FIELDS = ['Timestamp', 'Date', 'UTC', 'Callsign', 'Position', 'Altitude', 'Speed', 'Direction'];
+  const titleBase = document.getElementById('tracking-report-title').value;
+  const shift = document.getElementById('tracking-shift-name').value;
+  const date = new Date(tReportDateInput.value).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }).replace(/ /g,'-');
+  
+  document.getElementById('tracking-preview-title').textContent = `${titleBase} : ${shift} FOR ${date}`;
+  
+  const filtered = getFilteredTracking();
+  document.getElementById('tracking-row-count').textContent = `${filtered.length} ROWS`;
+
+  tbody.innerHTML = filtered.slice(0, 150).map((r) => `
+    <tr class="dr" draggable="true" data-oi="${r._i}" data-module="tracking">
+      ${FIELDS.map(f => `<td contenteditable="true" data-oi="${r._i}" data-field="${f}">${r[f] || ''}</td>`).join('')}
     </tr>
   `).join('');
+  
+  attachTrackingEvents();
 }
+
+// Filter events for Tracking
+document.getElementById('tracking-filterText').addEventListener('input', e => { tFilterText = e.target.value; renderTrackingTable(); });
+document.getElementById('tracking-filterCol').addEventListener('change', e => { tFilterColKey = e.target.value; renderTrackingTable(); });
+document.getElementById('tracking-btnClearFilter').addEventListener('click', () => {
+  tFilterText = ''; tFilterColKey = '';
+  document.getElementById('tracking-filterText').value = '';
+  document.getElementById('tracking-filterCol').value = '';
+  renderTrackingTable();
+});
+
+// Advanced Sort for Tracking
+document.getElementById('tracking-sortTransform').addEventListener('change', e => {
+  document.getElementById('tracking-sortKeyword').style.display = e.target.value === 'keyword' ? 'block' : 'none';
+});
+
+document.getElementById('tracking-btnSort').addEventListener('click', () => {
+  const field = document.getElementById('tracking-sortCol').value;
+  const transform = document.getElementById('tracking-sortTransform').value;
+  const dir = document.getElementById('tracking-sortDir').value;
+  const keyword = document.getElementById('tracking-sortKeyword').value.toLowerCase();
+
+  allTrackingData.sort((a, b) => {
+    let va = (a[field] || '').toString();
+    let vb = (b[field] || '').toString();
+
+    if (transform === 'numeric') {
+      const na = (va.match(/\d+/) || [0])[0];
+      const nb = (vb.match(/\d+/) || [0])[0];
+      return (dir === 'asc' ? 1 : -1) * (parseInt(na) - parseInt(nb));
+    } else if (transform === 'keyword' && keyword) {
+      const hasA = va.toLowerCase().includes(keyword);
+      const hasB = vb.toLowerCase().includes(keyword);
+      if (hasA && !hasB) return (dir === 'asc' ? -1 : 1);
+      if (!hasA && hasB) return (dir === 'asc' ? 1 : -1);
+    }
+    
+    const cmp = va.localeCompare(vb, undefined, { sensitivity: 'base', numeric: true });
+    return (dir === 'asc' ? 1 : -1) * cmp;
+  });
+  renderTrackingTable(); showToast('✓ Sort applied to tracking');
+});
+
+// Update table head for sorting
+document.querySelector('#tracking-table thead').addEventListener('click', e => {
+  const th = e.target.closest('th');
+  if (!th) return;
+  const field = th.textContent.trim();
+  if (tSortCol === field) tSortDir = (tSortDir === 'asc' ? 'desc' : 'asc');
+  else { tSortCol = field; tSortDir = 'asc'; }
+  renderTrackingTable();
+});
+
+['tracking-report-title', 'tracking-shift-name', 'tracking-report-date'].forEach(id => {
+  document.getElementById(id).addEventListener('input', renderTrackingTable);
+});
+
+function attachTrackingEvents() {
+  const tbl = document.getElementById('tracking-table');
+  if (!tbl) return;
+
+  // Inline edit
+  tbl.addEventListener('input', e => {
+    const td = e.target;
+    if (td.hasAttribute('data-oi')) {
+      const oi = +td.getAttribute('data-oi');
+      const field = td.getAttribute('data-field');
+      const val = td.textContent.trim();
+      if (field === 'Timestamp' || field === 'Altitude' || field === 'Speed' || field === 'Direction') {
+        allTrackingData[oi][field] = parseInt(val) || 0;
+      } else {
+        allTrackingData[oi][field] = val;
+      }
+    }
+  });
+
+  // Drag & Drop
+  tbl.querySelectorAll('tr.dr').forEach(tr => {
+    tr.addEventListener('dragstart', e => {
+      dragSrc = +tr.getAttribute('data-oi');
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => tr.style.opacity = '0.4', 0);
+    });
+    tr.addEventListener('dragend', () => {
+      tr.style.opacity = '1';
+      tbl.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over-row'));
+    });
+    tr.addEventListener('dragover', e => {
+      e.preventDefault();
+      tbl.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over-row'));
+      tr.classList.add('drag-over-row');
+    });
+    tr.addEventListener('drop', e => {
+      e.preventDefault();
+      const targetOi = +tr.getAttribute('data-oi');
+      if (dragSrc !== targetOi) {
+        const src = allTrackingData.splice(dragSrc, 1)[0];
+        allTrackingData.splice(targetOi, 0, src);
+        renderTrackingTable();
+        showToast('✓ Row moved');
+      }
+      tbl.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over-row'));
+    });
+  });
+
+  // Context Menu
+  tbl.addEventListener('contextmenu', e => {
+    const td = e.target.closest('td[data-oi]');
+    if (!td) return;
+    e.preventDefault();
+    ctxRow = +td.getAttribute('data-oi'); 
+    ctxTd = td;
+    ctxTd.setAttribute('data-module', 'tracking'); // Mark for context menu actions
+    const m = document.getElementById('ctxMenu');
+    
+    // Hide RPL specific context items if needed
+    const remSpacer = document.getElementById('ctxRemSpacer');
+    if (remSpacer) remSpacer.style.display = 'none';
+
+    let x = e.clientX, y = e.clientY;
+    if (x + 200 > window.innerWidth) x = window.innerWidth - 200;
+    if (y + 260 > window.innerHeight) y = window.innerHeight - 260;
+    m.style.left = x + 'px'; m.style.top = y + 'px';
+    m.classList.add('show');
+  });
+}
+
+// Add Row handler for tracking
+document.getElementById('tracking-add-row').addEventListener('click', () => {
+  const newRow = { Timestamp: 0, UTC: '', Callsign: '', Position: '', Altitude: 0, Speed: 0, Direction: 0 };
+  allTrackingData.push(newRow);
+  updateTrackingUI();
+  showToast('✓ Row added to tracking');
+});
 
 function clearTracking() {
   allTrackingData = [];
@@ -1396,14 +1695,17 @@ document.getElementById('tracking-export-pdf').addEventListener('click', () => {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF('p', 'mm', 'a4');
   const shift = document.getElementById('tracking-shift-name').value;
+  const titleBase = document.getElementById('tracking-report-title').value;
   const date = new Date(tReportDateInput.value).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }).replace(/ /g,'-');
   
+  const filteredData = getFilteredTracking();
+  
   doc.setFontSize(14);
-  doc.text(`FLIGHT TRACKING REPORT : ${shift} FOR ${date}`, 105, 15, { align: 'center' });
+  doc.text(`${titleBase} : ${shift} FOR ${date}`, 105, 15, { align: 'center' });
   
   doc.autoTable({
-    head: [['Timestamp', 'UTC', 'Callsign', 'Position', 'Altitude', 'Speed', 'Direction']],
-    body: allTrackingData.map(r => [r.Timestamp, r.UTC, r.Callsign, r.Position, r.Altitude, r.Speed, r.Direction]),
+    head: [['Timestamp', 'Date', 'UTC', 'Callsign', 'Position', 'Altitude', 'Speed', 'Direction']],
+    body: filteredData.map(r => [r.Timestamp, r.Date, r.UTC, r.Callsign, r.Position, r.Altitude, r.Speed, r.Direction]),
     startY: 25,
     styles: { fontSize: 7 },
     headStyles: { fillColor: [233, 30, 140] }, // Use pink accent
@@ -1414,7 +1716,10 @@ document.getElementById('tracking-export-pdf').addEventListener('click', () => {
 });
 
 document.getElementById('tracking-export-excel').addEventListener('click', () => {
-  const ws = XLSX.utils.json_to_sheet(allTrackingData);
+  const filteredData = getFilteredTracking();
+  // Remove the internal _i index before export
+  const exportData = filteredData.map(({_i, ...r}) => r);
+  const ws = XLSX.utils.json_to_sheet(exportData);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Tracking Report");
   XLSX.writeFile(wb, `Tracking_Report_${tReportDateInput.value}.xlsx`);
